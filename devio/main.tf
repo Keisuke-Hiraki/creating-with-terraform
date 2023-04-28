@@ -36,6 +36,7 @@ data aws_ssm_parameter amzn2_ami {
 # VPCを作成
 resource "aws_vpc" "my_vpc" {
   cidr_block = "10.0.0.0/16"
+  enable_dns_hostnames = true
 
   tags = {
     Name = "my-vpc"
@@ -167,11 +168,15 @@ resource "aws_instance" "bastion" {
   subnet_id     = aws_subnet.my_subnet1.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   iam_instance_profile  = aws_iam_instance_profile.ssm.name
+  associate_public_ip_address = true
   user_data = <<-EOF
-              #!/bin/bash
-              sudo yum update -y
-              sudo yum install -y mysql
-              EOF
+  #!/bin/bash
+  sudo yum update -y
+  sudo yum install -y mysql
+  sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+  sudo systemctl enable amazon-ssm-agent
+  sudo systemctl start amazon-ssm-agent
+  EOF
 
   tags = {
     Name = "bastion"
