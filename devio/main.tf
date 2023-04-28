@@ -133,12 +133,40 @@ resource "aws_eip" "my_eip" {
   }
 }
 
+# IAMロール作成
+resource "aws_iam_role" "ssm" {
+  name = "ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "ssm-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  role       = aws_iam_role.ssm.name
+}
+
 # 踏み台用のEC2をパブリックサブネットに作成
 resource "aws_instance" "bastion" {
   ami           = data.aws_ssm_parameter.amzn2_ami.value
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.my_subnet1.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  iam_instance_profile  = aws_iam_instance_profile.ssm.name
   user_data = <<-EOF
               #!/bin/bash
               sudo yum update -y
@@ -148,6 +176,12 @@ resource "aws_instance" "bastion" {
   tags = {
     Name = "bastion"
   }
+}
+
+# インスタンスプロファイルを定義
+resource "aws_iam_instance_profile" "ssm" {
+  name = "ssm-instance-profile"
+  role = aws_iam_role.ssm.name
 }
 
 # 踏み台用セキュリティグループを作成
