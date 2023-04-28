@@ -29,6 +29,10 @@ data "aws_ssm_parameter" "rds_password" {
   with_decryption = true
 }
 
+data aws_ssm_parameter amzn2_ami {
+  name = "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+}
+
 # VPCを作成
 resource "aws_vpc" "my_vpc" {
   cidr_block = "10.0.0.0/16"
@@ -131,7 +135,7 @@ resource "aws_eip" "my_eip" {
 
 # 踏み台用のEC2をパブリックサブネットに作成
 resource "aws_instance" "bastion" {
-  ami           = "ami-0c94855ba95c71c99"
+  ami           = data.aws_ssm_parameter.amzn2_ami.value
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.my_subnet1.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
