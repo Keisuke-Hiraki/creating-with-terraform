@@ -32,31 +32,31 @@ data "aws_ssm_parameter" "rds_password" {
 # VPCを作成
 resource "aws_vpc" "my_vpc" {
   cidr_block = "10.0.0.0/16"
-  enable_dns_hostnames = true
 
   tags = {
     Name = "my-vpc"
   }
 }
 
-# サブネットを作成
+# パブリックサブネットを作成
 resource "aws_subnet" "my_subnet1" {
-  vpc_id = aws_vpc.my_vpc.id
-  cidr_block = "10.0.1.0/24"
+  vpc_id            = aws_vpc.my_vpc.id
+  cidr_block        = "10.0.1.0/24"
   availability_zone = "ap-northeast-1a"
 
   tags = {
-    Name = "my-subnet1"
+    Name = "my-pub-subnet1"
   }
 }
 
+# プライベートサブネットを作成
 resource "aws_subnet" "my_subnet2" {
-  vpc_id = aws_vpc.my_vpc.id
-  cidr_block = "10.0.2.0/24"
+  vpc_id            = aws_vpc.my_vpc.id
+  cidr_block        = "10.0.2.0/24"
   availability_zone = "ap-northeast-1c"
 
   tags = {
-    Name = "my-subnet2"
+    Name = "my-pri-subnet2"
   }
 }
 
@@ -69,8 +69,8 @@ resource "aws_internet_gateway" "my_igw" {
   }
 }
 
-# ルートテーブルを作成
-resource "aws_route_table" "my_rt" {
+# パブリックサブネットにルートテーブルを作成
+resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.my_vpc.id
 
   route {
@@ -79,39 +79,116 @@ resource "aws_route_table" "my_rt" {
   }
 
   tags = {
-    Name = "my-rt"
+    Name = "public-route-table"
   }
 }
 
-# ルートテーブルとサブネットを関連付ける
-resource "aws_route_table_association" "my_rta1" {
-  subnet_id = aws_subnet.my_subnet1.id
-  route_table_id = aws_route_table.my_rt.id
+# パブリックサブネットにルートテーブルを関連付ける
+resource "aws_route_table_association" "public_rta" {
+  subnet_id      = aws_subnet.my_subnet1.id
+  route_table_id = aws_route_table.public_rt.id
 }
 
-resource "aws_route_table_association" "my_rta2" {
-  subnet_id = aws_subnet.my_subnet2.id
-  route_table_id = aws_route_table.my_rt.id
-}
-
-# セキュリティグループを作成
-resource "aws_security_group" "rds_sg" {
-  name_prefix = "rds_sg_"
+# プライベートサブネットにルートテーブルを作成
+resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.my_vpc.id
 
-  ingress {
-    from_port = 3306
-    to_port = 3306
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  tags = {
+    Name = "private-route-table"
   }
 }
 
+# プライベートサブネットにNATゲートウェイを経由するルートテーブルを関連付ける
+resource "aws_route" "private_route" {
+  route_table_id         = aws_route_table.private_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.my_nat_gateway.id
+}
+
+resource "aws_route_table_association" "private_rta" {
+  subnet_id      = aws_subnet.my_subnet2.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+# NATゲートウェイを作成
+resource "aws_nat_gateway" "my_nat_gateway" {
+  allocation_id = aws_eip.my_eip.id
+  subnet_id     = aws_subnet.my_subnet1.id
+
+  tags = {
+    Name = "my-nat-gateway"
+  }
+}
+
+# Elastic IPを作成
+resource "aws_eip" "my_eip" {
+  vpc = true
+
+  tags = {
+    Name = "my-eip"
+  }
+}
+
+# 踏み台用のEC2をパブリックサブネットに作成
+resource "aws_instance" "bastion" {
+  ami           = "ami-0c94855ba95c71c99"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.my_subnet1.id
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo yum install -y mysql
+              EOF
+
+  tags = {
+    Name = "bastion"
+  }
+}
+
+# 踏み台用セキュリティグループを作成
+resource "aws_security_group" "bastion_sg" {
+  name_prefix = "bastion-sg-"
+  vpc_id      = aws_vpc.my_vpc.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "bastion-sg"
+  }
+}
+
+# データベースセキュリティグループを作成
+resource "aws_security_group" "db_sg" {
+  name_prefix = "db-sg-"
+  vpc_id      = aws_vpc.my_vpc.id
+
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    security_groups = [
+      aws_security_group.bastion_sg.id,
+    ]
+  }
+
+  tags = {
+    Name = "db"
+  }
+}
+
+# サブネットグループの作成
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name        = "rds_subnet_group"
   subnet_ids  = [aws_subnet.my_subnet1.id, aws_subnet.my_subnet2.id]
 }
 
+# RDS MySQLを作成
 resource "aws_db_instance" "rds_instance" {
   identifier            = "myrds"
   db_name		= "myrdsinstance"
