@@ -6,14 +6,6 @@ terraform {
       version = "~> 4.23.0"
     }
   }
-  cloud {
-    organization = "xxx-org"
-    hostname = "app.terraform.io"
-
-    workspaces {
-      name = "xxx"
-    }
-  }
 }
 
 provider "aws" {
