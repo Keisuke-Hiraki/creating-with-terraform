@@ -6,10 +6,24 @@ terraform {
       version = "~> 4.23.0"
     }
   }
+  cloud {
+    organization = "cm-keisuke-poc-org"
+    hostname = "app.terraform.io"
+
+    workspaces {
+      name = "terraform-practice"
+    }
+  }
 }
 
 provider "aws" {
   region = "ap-northeast-1"
+}
+
+data "aws_caller_identity" "current" {}
+
+locals {
+  account_id = data.aws_caller_identity.current.account_id
 }
 
 data "aws_ssm_parameter" "rds_username" {
@@ -152,6 +166,40 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   role       = aws_iam_role.ssm.name
 }
+
+# IAMポリシー作成
+resource "aws_iam_policy" "ssm-param-access" {
+  name        = "ssm-access-policy"
+  policy      = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:DescribeParameters"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameters"
+            ],
+            "Resource": "arn:aws:ssm:ap-northeast-1:${local.account_id}:parameter/rds/mysql/*"
+        }
+    ]
+  })
+
+  tags = {
+    Name = "ssm-access-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ssm-param-access" {
+  policy_arn = aws_iam_policy.ssm-param-access.arn
+  role      = aws_iam_role.ssm.name
+}
+
 
 # 踏み台用のEC2をパブリックサブネットに作成
 resource "aws_instance" "bastion" {
