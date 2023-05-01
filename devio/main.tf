@@ -171,11 +171,11 @@ resource "aws_instance" "bastion" {
   associate_public_ip_address = true
   user_data = <<-EOF
   #!/bin/bash
-  sudo yum update -y
-  sudo yum install -y mysql
-  sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-  sudo systemctl enable amazon-ssm-agent
-  sudo systemctl start amazon-ssm-agent
+  yum update -y
+  yum install -y mysql
+  yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+  systemctl enable amazon-ssm-agent
+  systemctl start amazon-ssm-agent
   EOF
 
   tags = {
@@ -201,6 +201,13 @@ resource "aws_security_group" "bastion_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
   tags = {
     Name = "bastion-sg"
   }
@@ -218,6 +225,13 @@ resource "aws_security_group" "db_sg" {
     security_groups = [
       aws_security_group.bastion_sg.id,
     ]
+  }
+  
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
   }
 
   tags = {
