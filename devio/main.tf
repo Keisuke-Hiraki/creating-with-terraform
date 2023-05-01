@@ -7,11 +7,11 @@ terraform {
     }
   }
   cloud {
-    organization = "cm-keisuke-poc-org"
+    organization = "xxx-org"
     hostname = "app.terraform.io"
 
     workspaces {
-      name = "terraform-practice"
+      name = "xxx"
     }
   }
 }
