@@ -6,14 +6,6 @@ terraform {
       version = "~> 4.23.0"
     }
   }
-  cloud {
-    organization = "cm-keisuke-poc-org"
-    hostname = "app.terraform.io"
-
-    workspaces {
-      name = "terraform-practice"
-    }
-  }
 }
 
 provider "aws" {
